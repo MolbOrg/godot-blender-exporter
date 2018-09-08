@@ -41,9 +41,15 @@ def export_mesh_node(escn_file, export_settings, node, parent_gd_node):
         if ("ARMATURE" in export_settings['object_types'] and
                 armature_data is not None):
             skeleton_node = armature.find_skeletion_node(parent_gd_node)
-            mesh_exporter.init_mesh_bones_data(skeleton_node)
-            mesh_node['skeleton'] = NodePath(
-                mesh_node.get_path(), skeleton_node.get_path())
+            if skeleton_node is not None :
+                mesh_exporter.init_mesh_bones_data(skeleton_node)
+                mesh_node['skeleton'] = NodePath(
+                    mesh_node.get_path(), skeleton_node.get_path())
+            else:
+                logging.warning(
+                    "Skeleton node not fround for mesh (%s), skip Armature(%s)",
+                    node.name, armature_data.name
+                    )
 
         mesh_id = mesh_exporter.export_mesh(escn_file, export_settings)
 
