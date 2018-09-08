@@ -206,6 +206,8 @@ class GodotExporter:
         with open(self.path, 'w') as out_file:
             out_file.write(self.escn_file.to_string())
 
+        logging.info("File saved: %s", self.path)
+
         return True
 
     def __init__(self, path, kwargs, operator):
