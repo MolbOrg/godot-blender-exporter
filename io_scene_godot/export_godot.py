@@ -162,6 +162,25 @@ class GodotExporter:
 
         return True
 
+    def export_group(self, group):
+        logging.info(";export group %s" % group)
+        logging.info(self.config)
+        if "gpath" not in self.config:
+            self.config['gpath'] = self.config['path']
+
+        fname, fext = os.path.splitext(self.config['gpath'])
+
+        filepath = "%s.grp.%s%s" % (fname, group, fext)
+        logging.info("Save group %s to file %s" % (group, fname))
+        #TODO may overwrite nested groups, clean that
+        with GodotExporter(filepath, self.config.copy(), self.operator) as exp:
+            exp.scene = bpy.data.groups[group]
+            exp.export()
+            group_escn = structures.ExternalResource(filepath, "PackedScene")
+            idx = self.escn_file.add_external_resource(group_escn, bpy.data.groups[group])
+            if idx > 0 :
+                self.config["group_list"][group] = idx
+
     def export_scene(self):
         """Decide what objects to export, and export them!"""
         # Scene root
@@ -186,6 +205,21 @@ class GodotExporter:
                     node = node.parent
 
         logging.info("Exporting %d objects", len(self.valid_nodes))
+
+        # Look if there are instances of groups and export groups first
+        if self.config["group_mode"] != "GROUP_EMPTY":
+            grlist = {}
+            for obj in self.valid_nodes:
+                logging.info("type %s %s" % (obj.type, obj.dupli_type))
+                if obj.type == "EMPTY":
+                    if obj.dupli_group != None:
+                        if obj.dupli_type == "GROUP":
+                            grlist[obj.dupli_group.name] = 0
+            logging.info("Exporting %d groups", len(grlist))
+            if len(grlist) > 0:
+                self.config["group_list"] = {}
+                for group in grlist:
+                    self.export_group(group)
 
         for obj in self.scene.objects:
             if obj in self.valid_nodes and obj.parent is None:

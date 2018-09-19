@@ -6,9 +6,41 @@ Anything more complex should go in it's own file
 import math
 import logging
 from ..structures import (
-    NodeTemplate, fix_directional_transform, gamma_correct
+    NodeTemplate, NodeInstanceExt, fix_directional_transform, gamma_correct
 )
 from .animation import export_animation_data, AttributeConvertInfo
+
+def export_group_instance(escn_file, export_settings, node, parent_gd_node):
+    """If group is exported, add it as external scene to the node"""
+    if "GROUP" not in export_settings['object_types']:
+        return parent_gd_node
+
+    if export_settings["group_mode"] != "GROUP_FILE":
+        return parent_gd_node
+
+    #group = None
+    groupname = ""
+    group_id = 0
+    if node.type == "EMPTY":
+        if node.dupli_group != None:
+            if node.dupli_type == "GROUP":
+                groupname = node.dupli_group.name
+                try:
+                    group_id = export_settings["group_list"][groupname]
+                except KeyError as e:
+                    logging.warning("Failed to find group %s : %s" % (groupname, e))
+        else: #dupli_group == None
+            logging.warning("Empty group instance %s, import as empty" % node.name)
+            return parent_gd_node
+
+    if group_id < 1:
+        logging.info("Resource id not found for group %s, skip" % groupname)
+        return parent_gd_node
+
+    group_node = NodeInstanceExt(groupname, group_id, parent_gd_node)
+    escn_file.add_node(group_node)
+
+    return group_node
 
 
 def export_empty_node(escn_file, export_settings, node, parent_gd_node):
@@ -18,6 +50,9 @@ def export_empty_node(escn_file, export_settings, node, parent_gd_node):
     empty_node = NodeTemplate(node.name, "Spatial", parent_gd_node)
     empty_node['transform'] = node.matrix_local
     escn_file.add_node(empty_node)
+
+    #Emptry node can be a instance of a group
+    export_group_instance(escn_file, export_settings, node, empty_node)
 
     return empty_node
 

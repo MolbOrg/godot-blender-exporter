@@ -211,6 +211,30 @@ class NodeTemplate(FileEntry):
         """Get the node type in Godot scene"""
         return self.heading["type"]
 
+class NodeInstanceExt(FileEntry):
+    #TODO fix that for appropriate logic
+    def __init__(self, name, extres_id, parent_node):
+        super().__init__(
+            "node",
+            collections.OrderedDict((
+                ("name", name),
+                ("parent", parent_node.get_path())
+            ))
+        )
+        self["instance"] = "ExtResource ( {} )".format(extres_id)
+
+    def generate_heading_string(self):
+        """Convert the heading dict into [type key=val key=val ...]"""
+        out_str = '[{}'.format(self.entry_type)
+        for var in self.heading:
+            val = self.heading[var]
+
+            if isinstance(val, str):
+                val = '"{}"'.format(val)
+
+            out_str += " {}={}".format(var, val)
+        out_str += ' instance={}]'.format(self["instance"])
+        return out_str
 
 class ExternalResource(FileEntry):
     """External Resouces are references to external files. In the case of

@@ -60,6 +60,7 @@ class ExportGodot(bpy.types.Operator, ExportHelper):
             ("LAMP", "Lamp", ""),
             ("ARMATURE", "Armature", ""),
             ("MESH", "Mesh", ""),
+            ("GROUP", "Group", ""),
             # ("CURVE", "Curve", ""),
         ),
         default={
@@ -68,6 +69,7 @@ class ExportGodot(bpy.types.Operator, ExportHelper):
             "LAMP",
             "ARMATURE",
             "MESH",
+            "GROUP",
             # "CURVE"
         },
     )
@@ -163,6 +165,22 @@ class ExportGodot(bpy.types.Operator, ExportHelper):
                 "PROJECT_DIR", "Project Directory",
                 "Search for materials in the godot project directory"
             ),
+        )
+    )
+
+    group_mode = EnumProperty(
+        name="Group export mode",
+        description="Set mode for exporting EMPTY objects, which are instances of a group",
+        default="GROUP_FILE",
+        items=(
+            (
+                "GROUP_FILE", "Groups as files",
+                "Write groups as separate files, and link them"
+            ),
+            (
+                "GROUP_EMPTY", "Group as empty",
+                "Export only location placeholder, default for old exporter"
+            )
         )
     )
 
