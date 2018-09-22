@@ -3,6 +3,7 @@ import logging
 import bpy
 import bmesh
 import mathutils
+from math import isnan
 
 from .material import export_material
 from ..structures import (Array, NodeTemplate, InternalResource, NodePath,
@@ -135,7 +136,6 @@ class ArrayMeshResource(InternalResource):
     def set_surface_id(self, material_index, surface_id):
         """Set a relation between material and surface"""
         self._mat_to_surf_mapping[material_index] = surface_id
-
 
 class MeshResourceExporter:
     """Export a mesh resource from a blender mesh object"""
@@ -383,12 +383,24 @@ class MeshResourceExporter:
             for loop_id in range(face.loop_total):
                 loop_index = face.loop_start + loop_id
 
-                new_vert = Vertex.create_from_mesh_loop(
-                    mesh,
-                    loop_index,
-                    self.has_tangents,
-                    self.vgroup_to_bone_mapping
-                )
+                #Godot can't read nan values, which may be produced in export of a mesh
+                #generaly nan may be a valid description of a vertex
+                #but here it may be a good place to skip, hoping it may generate a good mesh after all
+                #and warn to indicate the problem
+                try:
+                    new_vert = Vertex.create_from_mesh_loop(
+                        mesh,
+                        loop_index,
+                        self.has_tangents,
+                        self.vgroup_to_bone_mapping
+                    )
+                except ValueError as ve:
+                    logging.warning("Skip vertex(NaN length) at surface %d (%d, %d): %s",
+                                    surface_index,
+                                    loop_id, loop_index,
+                                    ve
+                                    )
+                    continue
 
                 # Merge similar vertices
                 tup = new_vert.get_tup()
@@ -627,7 +639,13 @@ class Vertex:
     @classmethod
     def create_from_mesh_loop(cls, mesh, loop_index, has_tangents,
                               gid_to_bid_map):
-        """Create a vertex from a blender mesh loop"""
+        """Create a vertex from a blender mesh loop
+        raise ValueError if NaN in the vertices
+        """
+        loop = mesh.loops[loop_index]
+        if isnan(mesh.vertices[loop.vertex_index].co.length):
+            raise ValueError("NaN in the vertices: %s" % loop.vertex_index)
+
         new_vert = cls()
 
         loop = mesh.loops[loop_index]
