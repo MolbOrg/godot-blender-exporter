@@ -108,38 +108,41 @@ class GodotExporter:
                 node,
                 parent_gd_node
             )
+        try:
+            # Perform the export, note that `exported_node.paren`t not
+            # always the same as `parent_gd_node`, as sometimes, one
+            # blender node exported as two parented node
+            exported_node = exporter(self.escn_file, self.config, node,
+                                    parent_gd_node)
 
-        # Perform the export, note that `exported_node.paren`t not
-        # always the same as `parent_gd_node`, as sometimes, one
-        # blender node exported as two parented node
-        exported_node = exporter(self.escn_file, self.config, node,
-                                 parent_gd_node)
+            if is_bone_attachment:
+                for child in parent_gd_node.children:
+                    child['transform'] = structures.fix_bone_attachment_transform(
+                        node, child['transform']
+                    )
 
-        if is_bone_attachment:
-            for child in parent_gd_node.children:
-                child['transform'] = structures.fix_bone_attachment_transform(
-                    node, child['transform']
+            # CollisionShape node has different direction in blender
+            # and godot, so it has a -90 rotation around X axis,
+            # here rotate its children back
+            if exported_node.parent.get_type() == 'CollisionShape':
+                exported_node['transform'] *= (
+                    mathutils.Matrix.Rotation(math.radians(90), 4, 'X'))
+
+            # if the blender node is exported and it has animation data
+            if exported_node != parent_gd_node:
+                converters.ANIMATION_DATA_EXPORTER(
+                    self.escn_file,
+                    self.config,
+                    exported_node,
+                    node,
+                    "transform"
                 )
 
-        # CollisionShape node has different direction in blender
-        # and godot, so it has a -90 rotation around X axis,
-        # here rotate its children back
-        if exported_node.parent.get_type() == 'CollisionShape':
-            exported_node['transform'] *= (
-                mathutils.Matrix.Rotation(math.radians(90), 4, 'X'))
+            for child in node.children:
+                self.export_node(child, exported_node)
 
-        # if the blender node is exported and it has animation data
-        if exported_node != parent_gd_node:
-            converters.ANIMATION_DATA_EXPORTER(
-                self.escn_file,
-                self.config,
-                exported_node,
-                node,
-                "transform"
-            )
-
-        for child in node.children:
-            self.export_node(child, exported_node)
+        except IndexError as e:
+            logging.warning("node isn't properly exported, children(%d) IndexError : %s" % (len(node.children), e))
 
         bpy.context.scene.objects.active = prev_node
 
@@ -163,8 +166,6 @@ class GodotExporter:
         return True
 
     def export_group(self, group):
-        logging.info(";export group %s" % group)
-        logging.info(self.config)
         if "gpath" not in self.config:
             self.config['gpath'] = self.config['path']
 
@@ -207,10 +208,10 @@ class GodotExporter:
         logging.info("Exporting %d objects", len(self.valid_nodes))
 
         # Look if there are instances of groups and export groups first
+        #TODO groups and objects _can_ have the same name, reffer by index or group object
         if self.config["group_mode"] != "GROUP_EMPTY":
             grlist = {}
             for obj in self.valid_nodes:
-                logging.info("type %s %s" % (obj.type, obj.dupli_type))
                 if obj.type == "EMPTY":
                     if obj.dupli_group != None:
                         if obj.dupli_type == "GROUP":

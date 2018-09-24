@@ -14,6 +14,7 @@ from . import animation
 
 MAX_BONE_PER_VERTEX = 4
 
+#import pdb
 
 # ------------------------------- The Mesh -----------------------------------
 def export_mesh_node(escn_file, export_settings, node, parent_gd_node):
@@ -99,9 +100,13 @@ def fix_vertex(vtx):
 def get_modifier_armature_data(mesh_object):
     """Get the armature modifier of a blender object
     if does not have one, return None"""
-    for modifier in mesh_object.modifiers:
-        if isinstance(modifier, bpy.types.ArmatureModifier):
-            return modifier.object.data
+    try:
+        for modifier in mesh_object.modifiers:
+            if isinstance(modifier, bpy.types.ArmatureModifier):
+                return modifier.object.data
+    except AttributeError as e:
+        logging.warning("get_modifier_armature_data failed on %s : %s" % (mesh_object.name, e))
+
     return None
 
 
@@ -368,14 +373,18 @@ class MeshResourceExporter:
                 surface = Surface()
                 surface.id = surface_index
                 surfaces.append(surface)
-                if mesh.materials:
-                    mat = mesh.materials[face.material_index]
-                    if mat is not None:
-                        surface.material = export_material(
-                            escn_file,
-                            export_settings,
-                            mat
-                        )
+                try:
+                    if mesh.materials:
+                        mat = mesh.materials[face.material_index]
+                        if mat is not None:
+                            surface.material = export_material(
+                                escn_file,
+                                export_settings,
+                                mat
+                            )
+                except IndexError as e:
+                    logging.warning("Mesh conatins material index %d, total defined materials %d, face(%d) : %s"
+                                    % (face.material_index, len(mesh.materials), face_index, e))
 
             surface = surfaces[surface_index]
             vertex_indices = []
