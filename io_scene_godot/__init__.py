@@ -165,9 +165,18 @@ class ExportGodot(bpy.types.Operator, ExportHelper):
                 "PROJECT_DIR", "Project Directory",
                 "Search for materials in the godot project directory"
             ),
+            (
+                "EXPORT_DIR_CREATE", "Export Directory&Create",
+                "Search the folder where the escn is exported to, if not found create corresponding .tres file"
+            ),
         )
     )
 
+    material_disable_cull = BoolProperty(
+        name="Material disable cull",
+        description="Export materials with disabled cull, for spatial materials",
+        default=False,
+    )
     group_mode = EnumProperty(
         name="Group export mode",
         description="Set mode for exporting EMPTY objects, which are instances of a group",

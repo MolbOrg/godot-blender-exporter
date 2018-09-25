@@ -9,7 +9,7 @@ import os
 import bpy
 from .material_node_tree.exporters import export_node_tree
 from ..structures import (
-    InternalResource, ExternalResource, gamma_correct, ValidationError)
+    InternalResource, ExternalResource, gamma_correct, ValidationError, ExternalResourceTres)
 
 
 def export_image(escn_file, export_settings, image):
@@ -36,11 +36,39 @@ def export_image(escn_file, export_settings, image):
     return image_id
 
 
+def export_material_external(escn_file, export_settings, material):
+    """Create external .tres material file"""
+    mat = ExternalResourceTres("SpatialMaterial")
+
+    if export_settings["material_disable_cull"] :
+        mat['params_cull_mode'] = 2
+    mat['resource_name'] = '"%s"' % material.name
+    mat['flags_unshaded'] = material.use_shadeless
+    mat['flags_vertex_lighting'] = material.use_vertex_color_light
+    mat['flags_transparent'] = material.use_transparency
+    mat['vertex_color_use_as_albedo'] = material.use_vertex_color_paint
+    mat['albedo_color'] = material.diffuse_color
+    mat['subsurf_scatter_enabled'] = material.subsurface_scattering.use
+
+    fname = "%s%s" %  (material.name, ".tres")
+    fname = os.path.join(os.path.split(export_settings["path"])[0], fname)
+    logging.info("Write material %s, to file: %s" %(material.name, fname))
+    with open(fname, "w") as f:
+        f.write(mat.to_string())
+
+
 def export_material(escn_file, export_settings, material):
     """Exports blender internal/cycles material as best it can"""
     external_material = find_material(export_settings, material)
+
+    #Export materials as external resource if said so, and no materials found
+    if external_material is None and export_settings["material_search_paths"] == "EXPORT_DIR_CREATE":
+        export_material_external(escn_file, export_settings, material)
+        external_material = find_material(export_settings, material)
+
     if external_material is not None:
         resource_id = escn_file.get_external_resource(material)
+
         if resource_id is None:
             ext_mat = ExternalResource(
                 external_material[0],  # Path
@@ -86,6 +114,10 @@ def generate_material_resource(escn_file, export_settings, material):
     if mat is None:
         mat = InternalResource("SpatialMaterial", material_rsc_name)
 
+        if export_settings["material_disable_cull"] :
+            mat['params_cull_mode'] = 2
+
+        mat['resource_name'] = '"%s"' % material.name
         mat['flags_unshaded'] = material.use_shadeless
         mat['flags_vertex_lighting'] = material.use_vertex_color_light
         mat['flags_transparent'] = material.use_transparency
@@ -128,7 +160,7 @@ def find_material(export_settings, material):
     search_type = export_settings["material_search_paths"]
     if search_type == "PROJECT_DIR":
         search_dir = export_settings["project_path_func"]()
-    elif search_type == "EXPORT_DIR":
+    elif search_type in ("EXPORT_DIR", "EXPORT_DIR_CREATE",):
         search_dir = os.path.dirname(export_settings["path"])
     else:
         search_dir = None

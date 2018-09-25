@@ -261,6 +261,23 @@ class ExternalResource(FileEntry):
         ).replace('\\', '/')
 
 
+class ExternalResourceTres(FileEntry):
+    def __init__(self, resource_type):
+        super().__init__(
+            'gd_resource',
+            collections.OrderedDict((
+                # ID is overwritten by ESCN_File.add_external_resource
+                ('type', resource_type),
+                ('format', 2)
+            ))
+        )
+
+    def generate_heading_string(self):
+        heading = super().generate_heading_string()
+        heading = heading + '\n\n[resource]'
+        return heading
+
+
 class InternalResource(FileEntry):
     """ A resource stored internally to the escn file, such as the
     description of a material """
@@ -456,7 +473,6 @@ def float_to_string(num):
         # people would notice it collapsing.
         return '0.0'
     return '{:.6}'.format(num)
-
 
 def to_string(val):
     """Attempts to convert any object into a string using the conversions
