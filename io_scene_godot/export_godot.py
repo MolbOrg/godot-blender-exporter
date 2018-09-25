@@ -176,6 +176,11 @@ class GodotExporter:
         #TODO may overwrite nested groups, clean that
         with GodotExporter(filepath, self.config.copy(), self.operator) as exp:
             exp.scene = bpy.data.groups[group]
+            #Dirty hack group instances may have dupli_offset
+
+            vtx = bpy.data.groups[group].dupli_offset
+            vtx = mathutils.Vector((-vtx.x, -vtx.y, -vtx.z))
+            exp.scene_transform = mathutils.Matrix([[1.0, 0.0, 0.0, vtx.x], [0.0, 1.0, 0.0, vtx.y], [0.0, 0.0, 1.0, vtx.z]])
             exp.export()
             group_escn = structures.ExternalResource(filepath, "PackedScene")
             idx = self.escn_file.add_external_resource(group_escn, bpy.data.groups[group])
@@ -190,6 +195,9 @@ class GodotExporter:
             "Spatial",
             None
         )
+        if hasattr(self, "scene_transform"):
+            root_gd_node["transform"] = self.scene_transform
+
         self.escn_file.add_node(root_gd_node)
         logging.info("Exporting scene: %s", self.scene.name)
 
