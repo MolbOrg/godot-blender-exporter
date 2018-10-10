@@ -46,8 +46,8 @@ class ExportGodot(bpy.types.Operator, ExportHelper):
     bl_label = "Export to Godot"
     bl_options = {"PRESET"}
 
-    filename_ext = ".escn"
-    filter_glob = StringProperty(default="*.escn", options={"HIDDEN"})
+    filename_ext = ".tscn"
+    filter_glob = StringProperty(default="*.tscn", options={"HIDDEN"})
 
     # List of operator properties, the attributes will be assigned
     # to the class instance from the operator settings before calling
