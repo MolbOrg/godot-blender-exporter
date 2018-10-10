@@ -10,6 +10,8 @@ from ..structures import (
 )
 from .animation import export_animation_data, AttributeConvertInfo
 
+from ..blender_tweaks import node_matrix
+
 def export_group_instance(escn_file, export_settings, node, parent_gd_node):
     """If group is exported, add it as external scene to the node"""
     if "GROUP" not in export_settings['object_types']:
@@ -18,7 +20,6 @@ def export_group_instance(escn_file, export_settings, node, parent_gd_node):
     if export_settings["group_mode"] != "GROUP_FILE":
         return parent_gd_node
 
-    #group = None
     groupname = ""
     group_id = 0
     if node.type == "EMPTY":
@@ -29,7 +30,7 @@ def export_group_instance(escn_file, export_settings, node, parent_gd_node):
                     group_id = export_settings["group_list"][groupname]
                 except KeyError as e:
                     logging.warning("Failed to find group %s : %s" % (groupname, e))
-        else: #dupli_group == None
+        else:
             logging.warning("Empty group instance %s, import as empty" % node.name)
             return parent_gd_node
 
@@ -48,10 +49,10 @@ def export_empty_node(escn_file, export_settings, node, parent_gd_node):
     if "EMPTY" not in export_settings['object_types']:
         return parent_gd_node
     empty_node = NodeTemplate(node.name, "Spatial", parent_gd_node)
-    empty_node['transform'] = node.matrix_local
+    empty_node['transform'] = node_matrix(export_settings, node)
     escn_file.add_node(empty_node)
 
-    #Emptry node can be a instance of a group
+    #Empty node can be a instance of a group
     export_group_instance(escn_file, export_settings, node, empty_node)
 
     return empty_node

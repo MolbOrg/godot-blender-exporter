@@ -12,6 +12,8 @@ from . import physics
 from . import armature
 from . import animation
 
+from ..blender_tweaks import node_matrix
+
 MAX_BONE_PER_VERTEX = 4
 
 #import pdb
@@ -61,7 +63,7 @@ def export_mesh_node(escn_file, export_settings, node, parent_gd_node):
         # Transform of rigid mesh is moved up to its collision
         # shapes.
         if not physics.has_physics(node):
-            mesh_node['transform'] = node.matrix_local
+            mesh_node['transform'] = node_matrix(export_settings, node)
         else:
             mesh_node['transform'] = mathutils.Matrix.Identity(4)
 

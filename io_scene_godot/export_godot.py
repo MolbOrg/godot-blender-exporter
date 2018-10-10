@@ -83,8 +83,7 @@ class GodotExporter:
         """Recursively export a node. It calls the export_node function on
         all of the nodes children. If you have heirarchies more than 1000 nodes
         deep, this will fail with a recursion error"""
-        if node not in self.valid_nodes:
-            return
+
         logging.info("Exporting Blender Object: %s", node.name)
 
         prev_node = bpy.context.scene.objects.active
@@ -95,7 +94,7 @@ class GodotExporter:
             exporter = converters.BLENDER_TYPE_TO_EXPORTER[node.type]
         else:
             logging.warning(
-                "Unknown object type. Treating as empty: %s", node.name
+                "Unknown object type(%s). Treating as empty: %s", node.type, node.name
             )
             exporter = converters.BLENDER_TYPE_TO_EXPORTER["EMPTY"]
 
@@ -138,8 +137,17 @@ class GodotExporter:
                     "transform"
                 )
 
+            #children may be not presnt in the scene, linked objects, miltiple scenes
+            #so as probably it needs to vet those if they should be exported
             for child in node.children:
-                self.export_node(child, exported_node)
+                if self.should_export_node(child):
+                    #self.export_node(child, exported_node)
+                    if self.config["group_export"]:
+                        if child.name in self.config["group"].objects:
+                            self.export_node(child, exported_node)
+                    else:
+                        if child.name in self.config["scene"].objects:
+                            self.export_node(child, exported_node)
 
         except IndexError as e:
             logging.warning("node isn't properly exported, children(%d) IndexError : %s" % (len(node.children), e))
@@ -172,20 +180,82 @@ class GodotExporter:
         fname, fext = os.path.splitext(self.config['gpath'])
 
         filepath = "%s.grp.%s%s" % (fname, group, fext)
-        logging.info("Save group %s to file %s" % (group, fname))
-        #TODO may overwrite nested groups, clean that
-        with GodotExporter(filepath, self.config.copy(), self.operator) as exp:
-            exp.scene = bpy.data.groups[group]
-            #Dirty hack group instances may have dupli_offset
+        if os.path.isfile(filepath):
+            logging.info("Using saved file for group %s, file: %s" % (group, filepath))
+        else:
+            logging.info("Save group %s to file %s" % (group, filepath))
+            with GodotExporter(filepath, self.config.copy(), self.operator) as exp:
+                #Dirty hack group instances may have dupli_offset
 
-            vtx = bpy.data.groups[group].dupli_offset
-            vtx = mathutils.Vector((-vtx.x, -vtx.y, -vtx.z))
-            exp.scene_transform = mathutils.Matrix([[1.0, 0.0, 0.0, vtx.x], [0.0, 1.0, 0.0, vtx.y], [0.0, 0.0, 1.0, vtx.z]])
-            exp.export()
-            group_escn = structures.ExternalResource(filepath, "PackedScene")
-            idx = self.escn_file.add_external_resource(group_escn, bpy.data.groups[group])
-            if idx > 0 :
-                self.config["group_list"][group] = idx
+                vtx = bpy.data.groups[group].dupli_offset
+                vtx = mathutils.Vector((-vtx.x, -vtx.y, -vtx.z))
+                exp.scene_transform = mathutils.Matrix([[1.0, 0.0, 0.0, vtx.x], [0.0, 1.0, 0.0, vtx.y], [0.0, 0.0, 1.0, vtx.z]])
+                exp.group_export = True
+                exp.config["group_export"] = True
+                exp.group = bpy.data.groups[group]
+                exp.config["group"] = bpy.data.groups[group]
+                exp.export()
+        group_escn = structures.ExternalResource(filepath, "PackedScene")
+        idx = self.escn_file.add_external_resource(group_escn, bpy.data.groups[group])
+        if idx > 0 :
+            self.config["group_list"][group] = idx
+
+    def export_groups(self, objects):
+        # Look if there are instances of groups and export groups first
+        #TODO groups and objects _can_ have the same name, reffer by index or group object
+        if self.config["group_mode"] != "GROUP_EMPTY":
+            grlist = {}
+            for obj in objects:
+                #logging.info("type %s %s" % (obj.type, obj.dupli_type))
+                if obj.type == "EMPTY":
+                    if obj.dupli_group != None:
+                        if obj.dupli_type == "GROUP":
+                            grlist[obj.dupli_group.name] = 0
+            logging.info("Exporting %d groups", len(grlist))
+            if len(grlist) > 0:
+                self.config["group_list"] = {}
+                for group in grlist:
+                    self.export_group(group)
+
+
+    def export_group_objects(self):
+        """Decide what objects in a group to export, and export them!"""
+        # Scene root
+        root_gd_node = structures.NodeTemplate(
+            self.group.name,
+            "Spatial",
+            None
+        )
+        if hasattr(self, "scene_transform"):
+            root_gd_node["transform"] = self.scene_transform
+
+        self.escn_file.add_node(root_gd_node)
+        logging.info("Exporting Group: %s", self.group.name)
+
+
+        # Decide what objects to export
+        to_export = []
+        for obj in self.group.objects:
+            # All group objects are valid nodes
+            self.valid_nodes.append(obj)
+
+            # No parents outside the group, but keep relations inside the group
+            # Children are exported in export_node
+            if obj.parent is not None:
+                if obj.parent.name not in self.group.objects:
+                    to_export.append(obj)
+            else:
+                to_export.append(obj)
+
+        logging.info("Exporting %d objects", len(self.group.objects))
+
+        #Export groups of instances in the scene as separate scene files
+        if self.config["group_mode"] != "GROUP_EMPTY":
+            self.export_groups(self.group.objects)
+
+        for obj in to_export:
+            self.export_node(obj, root_gd_node)
+
 
     def export_scene(self):
         """Decide what objects to export, and export them!"""
@@ -215,24 +285,18 @@ class GodotExporter:
 
         logging.info("Exporting %d objects", len(self.valid_nodes))
 
-        # Look if there are instances of groups and export groups first
-        #TODO groups and objects _can_ have the same name, reffer by index or group object
+        #Export groups of instances in the scene as separate scene files
         if self.config["group_mode"] != "GROUP_EMPTY":
-            grlist = {}
-            for obj in self.valid_nodes:
-                if obj.type == "EMPTY":
-                    if obj.dupli_group != None:
-                        if obj.dupli_type == "GROUP":
-                            grlist[obj.dupli_group.name] = 0
-            logging.info("Exporting %d groups", len(grlist))
-            if len(grlist) > 0:
-                self.config["group_list"] = {}
-                for group in grlist:
-                    self.export_group(group)
+            self.export_groups(self.valid_nodes)
 
+        # Instances of groups and linked instances can have parents,
+        # which are not in the current scene
         for obj in self.scene.objects:
-            if obj in self.valid_nodes and obj.parent is None:
-                self.export_node(obj, root_gd_node)
+            if obj in self.valid_nodes:
+                if obj.parent is None:
+                    self.export_node(obj, root_gd_node)
+                elif obj.parent.name not in self.scene.objects:
+                    self.export_node(obj, root_gd_node)
 
     def export(self):
         """Begin the export"""
@@ -244,7 +308,10 @@ class GodotExporter:
             ))
         ))
 
-        self.export_scene()
+        if self.group_export:
+            self.export_group_objects()
+        else:
+            self.export_scene()
         self.escn_file.fix_paths(self.config)
         with open(self.path, 'w') as out_file:
             out_file.write(self.escn_file.to_string())
@@ -265,6 +332,11 @@ class GodotExporter:
         self.valid_nodes = []
 
         self.escn_file = None
+
+        self.group_export = False
+        self.config["groups"] = bpy.data.groups
+        self.config["group_export"] = False
+        self.config["scene"] = self.scene
 
     def __enter__(self):
         return self
