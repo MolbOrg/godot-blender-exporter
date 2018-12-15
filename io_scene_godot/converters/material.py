@@ -47,7 +47,7 @@ def export_material_external(escn_file, export_settings, material):
     mat['flags_vertex_lighting'] = material.use_vertex_color_light
     mat['flags_transparent'] = material.use_transparency
     mat['vertex_color_use_as_albedo'] = material.use_vertex_color_paint
-    mat['albedo_color'] = material.diffuse_color
+    mat['albedo_color'] = gamma_correct(material.diffuse_color)
     mat['subsurf_scatter_enabled'] = material.subsurface_scattering.use
 
     fname = "%s%s" %  (material.name, ".tres")
