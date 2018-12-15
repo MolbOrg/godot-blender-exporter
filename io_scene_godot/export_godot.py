@@ -151,6 +151,10 @@ class GodotExporter:
 
         except IndexError as e:
             logging.warning("node isn't properly exported, children(%d) IndexError : %s" % (len(node.children), e))
+        except AttributeError as e:
+            logging.error("node isn't properly exported, children(%d) IndexError : %s" % (len(node.children), e))
+            
+                
 
         bpy.context.scene.objects.active = prev_node
 
